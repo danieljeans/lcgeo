@@ -24,8 +24,11 @@ SEcal05_Helpers::SEcal05_Helpers() {
 
   _caloLayer.absorberThickness = -999;
   _caloLayer.sensitive_thickness = -999;
+  _caloLayer.distance = 0;
 
   _totThick=0;
+
+  _plugLength=0;
 
   _magicMegatileStrategy=-1;
 }
@@ -50,11 +53,11 @@ void SEcal05_Helpers::checkLayerConsistency() {
   // check that number of requested absober layers is consistent
   // if we want a preshower layer, total number of Absorber layers should be odd; otherwise even
   if ( _preshower==1 && n_total_abs_layers%2==0 ) {
-    std::cout << "ERROR: inconsistent ECAL model !! if you request a preshower layer, the number of absorber layers = _nlayers1 + _nlayers2 + _nlayers3 must be odd" << std::endl;
+    std::cout << "SEcal05_Helpers ERROR: inconsistent ECAL model !! if you request a preshower layer, the number of absorber layers = _nlayers1 + _nlayers2 + _nlayers3 must be odd" << std::endl;
     std::cout << " Ecal_PreshowerLayer = " << _preshower << " ; _nlayers1/2/3 = " << _nlayers1 << " " << _nlayers2 << " " << _nlayers3 << std::endl;
     assert(0);
   } else if ( _preshower==0 && n_total_abs_layers%2==1 ) {
-    std::cout << "ERROR: inconsistent ECAL model !! if you request no preshower layer, the number of absorber layers = _nlayers1 + _nlayers2 + _nlayers3 must be even" << std::endl;
+    std::cout << "SEcal05_Helpers ERROR: inconsistent ECAL model !! if you request no preshower layer, the number of absorber layers = _nlayers1 + _nlayers2 + _nlayers3 must be even" << std::endl;
     std::cout << " Ecal_PreshowerLayer = " << _preshower << " ; _nlayers1/2/3 = " << _nlayers1 << " " << _nlayers2 << " " << _nlayers3 << std::endl;
     assert(0);
   }
@@ -68,6 +71,7 @@ float SEcal05_Helpers::getTotalThickness() {
   assert( (_preshower==0 || _preshower==1) && "_preshower not set" );
   assert( _CF_absWrap>=0. && _CF_alvWall>=0. && _CF_front>=0. && _CF_back>=0. && "CF thicknesses not set" );
   float totalThickness = _CF_front+_CF_back;// front and back supports
+
   // the absorber in the structure
   for (unsigned int i=0; i<_nlayers1+_nlayers2+_nlayers3; i++) {
     bool inStructure = _preshower ? i%2==1 : i%2==0 ;
@@ -92,8 +96,8 @@ float SEcal05_Helpers::getTotalThickness() {
   return totalThickness;
 }
 
-void SEcal05_Helpers::printSEcal05LayerInfo( DDRec::LayeredCalorimeterData::Layer & caloLayer) {
-  std::cout<<"=== CALOLAYER printout: "                 << std::endl;
+void SEcal05_Helpers::printSEcal05LayerInfo( dd4hep::rec::LayeredCalorimeterData::Layer & caloLayer) {
+  std::cout<<"SEcal05_Helpers === CALOLAYER printout: "                 << std::endl;
   std::cout<<"    caloLayer.distance: "                 << caloLayer.distance <<std::endl;
   std::cout<<"    caloLayer.inner_nRadiationLengths: "  << caloLayer.inner_nRadiationLengths <<std::endl;
   std::cout<<"    caloLayer.inner_nInteractionLengths: "<< caloLayer.inner_nInteractionLengths <<std::endl;
@@ -134,7 +138,11 @@ std::vector <SEcal05_Helpers::dimposXYStruct> SEcal05_Helpers::getAbsPlateXYDime
       ss.sizeX = _module_dX_max;
       ss.posX = ss.sizeX/2.;
     } else {   // size varies by laer
-      ss.sizeX = _module_dX_max - 2.*ztop;
+
+      //      ss.sizeX = _module_dX_max - 2.*ztop; // this assumes octagon
+
+      ss.sizeX = _module_dX_max - 2.*ztop/tan(_module_angle); // for general shape
+
       ss.posX  = _module_dX_max/2.;   // keep it centered
     }
     ss.sizeY = _module_dY_total;
@@ -171,9 +179,18 @@ std::vector <SEcal05_Helpers::dimposXYStruct> SEcal05_Helpers::getSlabXYDimensio
             ss.sizeX = _module_dX_max;
             ss.posX = ss.sizeX/2.;
           } else {                     // layers vary in length : barrel module
-            ss.sizeX = _module_dX_max - 2.*ztop; // assumes octagon
+
+            // ss.sizeX = _module_dX_max - 2.*ztop; // assumes octagon
+
+	    ss.sizeX = _module_dX_max - 2.*ztop/tan(_module_angle); // for general shape
+
             ss.posX = _module_dX_max/2.;  // slabs all centred
           }
+
+	  ss.sizeX -= _plugLength; // DANIELHACK 
+	  ss.posX += _plugLength/2.;  // DANIELHACK 
+
+
 
         } else if ( _module_XYtype==1 ) { // slabs within layer have different lengths : this is for endcap
           // placing in Y
@@ -184,9 +201,14 @@ std::vector <SEcal05_Helpers::dimposXYStruct> SEcal05_Helpers::getSlabXYDimensio
 	  } else {            // sloping edge: take length at upperY, which is the shortest one
 	    ss.sizeX = _module_dX_max - ( upperY - _module_dY_kink );
 	  }
+
           ss.posX = ss.sizeX/2.; // this aligns the -X end of slab
+
+	  ss.sizeX -=  _plugLength;  // DANIELHACK
+	  ss.posX  +=  _plugLength/2.;  // DANIELHACK      
+
         } else {
-	  cout << " ERROR _module_XYtype = " << _module_XYtype << "!!!" << endl;
+	  cout << " SEcal05_Helpers ERROR _module_XYtype = " << _module_XYtype << "!!!" << endl;
 	  assert(0);
 	}
 	layerslabdims.push_back(ss);
@@ -202,7 +224,7 @@ std::vector <SEcal05_Helpers::dimposXYStruct> SEcal05_Helpers::getSlabXYDimensio
 
 
 void SEcal05_Helpers::updateCaloLayers(double thickness,
-                                       DD4hep::Geometry::Material mat,
+                                       dd4hep::Material mat,
                                        bool isAbsorber,
                                        bool isSensitive,
                                        double cell_size_x, double cell_size_y,
@@ -234,6 +256,12 @@ void SEcal05_Helpers::updateCaloLayers(double thickness,
     _layer_thickness=0;
     _layer_nRadiationLengths=0;
     _layer_nInteractionLengths=0;
+
+    // update the calolayer.distance ( DJeans 12 sep 2017)
+    // here this is distance from ECAL start to the layer start; the Barrel and Endcap drivers add the distance from IP
+    _caloLayer.distance += _caloLayer.inner_thickness+_caloLayer.outer_thickness;
+
+
   }
 
   if (!isFinal) {
@@ -251,8 +279,6 @@ void SEcal05_Helpers::updateCaloLayers(double thickness,
       _caloLayer.inner_nRadiationLengths   = _layer_nRadiationLengths ;
       _caloLayer.inner_nInteractionLengths = _layer_nInteractionLengths ;
       _caloLayer.inner_thickness           = _layer_thickness ;
-
-      _caloLayer.distance  = _totThick + thickness/2.; // distance from front face
 
       // reset layer thicknesses
       _layer_thickness=0;
@@ -343,6 +369,7 @@ SEcal05_Helpers::dxinfo SEcal05_Helpers::getNormalMagicUnitsInX( double dx_total
   if ( magicStrategy==2 ) {
     // check it fills exactly
     if ( fabs( dxInf.normal_nX*dxInf.magic1_unitDX + dxInf.magic1_unitDX + dxInf.magic2_unitDX - dx_total ) < 0.01*dd4hep::mm ) {
+      cout << " SEcal05_Helpers ERROR : " << endl;
       cout << dxInf.normal_nX*dxInf.magic1_unitDX << " " << dxInf.magic1_unitDX << " " << dxInf.magic2_unitDX << endl;
       cout << dxInf.normal_nX*dxInf.magic1_unitDX + dxInf.magic1_unitDX + dxInf.magic2_unitDX << " " << dx_total << endl;
       cout << dxInf.normal_nX*dxInf.magic1_unitDX + dxInf.magic1_unitDX + dxInf.magic2_unitDX - dx_total << endl;
@@ -355,11 +382,11 @@ SEcal05_Helpers::dxinfo SEcal05_Helpers::getNormalMagicUnitsInX( double dx_total
 }
 
 
-void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the volume we'll fill
-				  DD4hep::Geometry::DetElement & stave_det, // the detector element
-				  DDRec::LayeredCalorimeterData & caloData, // the reco data we'll fill
-				  DD4hep::Geometry::LCDD & lcdd,
-				  DD4hep::Geometry::SensitiveDetector & sens
+void SEcal05_Helpers::makeModule( dd4hep::Volume & mod_vol,  // the volume we'll fill
+				  dd4hep::DetElement & stave_det, // the detector element
+				  dd4hep::rec::LayeredCalorimeterData & caloData, // the reco data we'll fill
+				  dd4hep::Detector & theDetector,
+				  dd4hep::SensitiveDetector & sens
 				  ) {
   // make the module
   _caloData = &caloData;
@@ -382,19 +409,19 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
   int det_id           = _x_det->id();
   xml_comp_t x_staves  = _x_det->staves();
 
-  _carbon_fibre_material = lcdd.material("CarbonFiber");
-  _radiator_material     = lcdd.material(x_staves.materialStr());
-  _air_material          = lcdd.air();
+  _carbon_fibre_material = theDetector.material("CarbonFiber");
+  _radiator_material     = theDetector.material(x_staves.materialStr());
+  _air_material          = theDetector.air();
 
-  DD4hep::Geometry::VisAttr _radiator_visatt      = lcdd.visAttributes( x_staves.visStr() );
+  dd4hep::VisAttr _radiator_visatt      = theDetector.visAttributes( x_staves.visStr() );
 
   // get segmentation stuff
   assert (_geomseg && "segmentation not set");
 
-  DD4hep::DDSegmentation::WaferGridXY* waferSeg = dynamic_cast< DD4hep::DDSegmentation::WaferGridXY* > ( _geomseg->segmentation() ) ;
+  dd4hep::DDSegmentation::WaferGridXY* waferSeg = dynamic_cast< dd4hep::DDSegmentation::WaferGridXY* > ( _geomseg->segmentation() ) ;
 
 
-  DD4hep::DDSegmentation::MegatileLayerGridXY* megatileSeg = dynamic_cast< DD4hep::DDSegmentation::MegatileLayerGridXY* > ( _geomseg->segmentation() ) ;
+  dd4hep::DDSegmentation::MegatileLayerGridXY* megatileSeg = dynamic_cast< dd4hep::DDSegmentation::MegatileLayerGridXY* > ( _geomseg->segmentation() ) ;
   assert( (waferSeg || megatileSeg) && "no segmentation found" );
 
   // set up the standard megatile size and offset
@@ -430,7 +457,7 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
 
     // Loop over number of repeats for this layer type
     for (int j=0; j< x_layer.repeat(); j++)    {  // layers within this type (or "stack")
-      std::string l_name = _toString(layer_index,"layer%d");
+      std::string l_name = dd4hep::_toString(layer_index,"layer%d");
 
       // #########################
       // Build Structure Layer
@@ -450,8 +477,8 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
           this_struct_CFthick_afterAbs = _CF_front + _CF_alvWall;
           radiator_dim_Z = 0;
         } else { // include W+CF wrapping; only one side of alveolus
-          cout << " -- no preshower, including absorber" << endl;
-          this_struct_CFthick_beforeAbs = _CF_absWrap;
+          // cout << " -- no preshower, including absorber" << endl;
+          this_struct_CFthick_beforeAbs = _CF_front + _CF_absWrap; // allow for initial CF front plate also in no preshower case - djeans 6 july 2017
           this_struct_CFthick_afterAbs = _CF_absWrap + _CF_alvWall;
           radiator_dim_Z = getAbsThickness( absorber_index++ );
           rad_pos_Z = radiator_dim_Z/2. + this_struct_CFthick_beforeAbs; // distance from top surface of structure to centre of radiator
@@ -472,19 +499,19 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
         // create and place the absorber sheets
         for ( size_t ipl=0; ipl<absorbersheets.size(); ipl++) {
           dimposXYStruct plSize = absorbersheets[ipl];
-          DD4hep::Geometry::Box    barrelStructureLayer_box( plSize.sizeX/2.,
+          dd4hep::Box    barrelStructureLayer_box( plSize.sizeX/2.,
                                                              plSize.sizeY/2. - _CF_absWrap,  // remove CF wrapping
                                                              radiator_dim_Z/2.);
 
-          DD4hep::Geometry::Volume barrelStructureLayer_vol( _det_name+"_"+l_name+"_"+_toString(int(ipl),"bs%02d"),
+          dd4hep::Volume barrelStructureLayer_vol( _det_name+"_"+l_name+"_"+dd4hep::_toString(int(ipl),"bs%02d"),
                                                              barrelStructureLayer_box, _radiator_material);
 
           barrelStructureLayer_vol.setVisAttributes( _radiator_visatt );
 
           // Position the layer.
-          DD4hep::Geometry::Position      bsl_pos = getTranslatedPosition(plSize.posX, plSize.posY, currentLayerBase_pos_Z + rad_pos_Z );
+          dd4hep::Position      bsl_pos = getTranslatedPosition(plSize.posX, plSize.posY, currentLayerBase_pos_Z + rad_pos_Z );
 
-	  //          DD4hep::Geometry::PlacedVolume  barrelStructureLayer_phv = 
+	  //          dd4hep::PlacedVolume  barrelStructureLayer_phv = 
 	  mod_vol.placeVolume(barrelStructureLayer_vol, bsl_pos);
 
         } // loop over sheets
@@ -509,7 +536,7 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
       for(xml_coll_t si(x_layer,_U(slice)); si; ++si)  {
         xml_comp_t  x_slice = si;
         double      s_thick = x_slice.thickness();
-        DD4hep::Geometry::Material slice_material  = lcdd.material( x_slice.materialStr() );
+        dd4hep::Material slice_material  = theDetector.material( x_slice.materialStr() );
         if (x_slice.materialStr().compare(x_staves.materialStr()) == 0){
           // this is absorber material
           //  check it's consistent with what we expect from the detector parameters
@@ -555,16 +582,16 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
         double slab_dim_X  = slabDims[islab].sizeX;
 
         // make an air volume for the alveolus
-        DD4hep::Geometry::Box        l_box( slab_dim_X/2. ,
+        dd4hep::Box        l_box( slab_dim_X/2. ,
                                             slabDims[islab].sizeY/2. - _CF_alvWall,
                                             slab_dim_Z/2. );
 
-        DD4hep::Geometry::Volume     l_vol( _det_name+"_alveolus_"+l_name, l_box, _air_material);
-	l_vol.setVisAttributes(lcdd.visAttributes( "GrayVis" ) );
+        dd4hep::Volume     l_vol( _det_name+"_alveolus_"+l_name, l_box, _air_material);
+	l_vol.setVisAttributes(theDetector.visAttributes( "GrayVis" ) );
 
-        DD4hep::Geometry::DetElement l_det( stave_det, l_name+_toString(int(islab),"tower%02d") , det_id );
-        DD4hep::Geometry::Position   l_pos = getTranslatedPosition(slabDims[islab].posX, slabDims[islab].posY, slab_pos_Z );
-        DD4hep::Geometry::PlacedVolume l_phv = mod_vol.placeVolume(l_vol,l_pos);
+        dd4hep::DetElement l_det( stave_det, l_name+dd4hep::_toString(int(islab),"tower%02d") , det_id );
+        dd4hep::Position   l_pos = getTranslatedPosition(slabDims[islab].posX, slabDims[islab].posY, slab_pos_Z );
+        dd4hep::PlacedVolume l_phv = mod_vol.placeVolume(l_vol,l_pos);
         l_phv.addPhysVolID("tower", int(islab) );
         l_det.setPlacement(l_phv);
 
@@ -574,21 +601,21 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
 
         for(xml_coll_t si(x_layer,_U(slice)); si; ++si)  { // the sub-layers
           xml_comp_t  x_slice = si;
-          std::string s_name  = _toString(s_num,"slice%d");
+          std::string s_name  = dd4hep::_toString(s_num,"slice%d");
           double      s_thick = x_slice.thickness();
 
-          DD4hep::Geometry::Material slice_material  = lcdd.material( x_slice.materialStr() );
+          dd4hep::Material slice_material  = theDetector.material( x_slice.materialStr() );
 
 	  std::string vis_str = x_slice.visStr();
 
 	  if ( !x_slice.isSensitive() ) { // not the sensitive slice: just a layer of stuff
 
-	    DD4hep::Geometry::Box      s_box( slab_dim_X/2. , slabDims[islab].sizeY/2. - _CF_alvWall, s_thick/2. );
-	    DD4hep::Geometry::Volume   s_vol(_det_name+"_"+l_name+"_"+s_name, s_box, slice_material);
-	    s_vol.setVisAttributes(lcdd.visAttributes( vis_str ));
+	    dd4hep::Box      s_box( slab_dim_X/2. , slabDims[islab].sizeY/2. - _CF_alvWall, s_thick/2. );
+	    dd4hep::Volume   s_vol(_det_name+"_"+l_name+"_"+s_name, s_box, slice_material);
+	    s_vol.setVisAttributes(theDetector.visAttributes( vis_str ));
 
-	    DD4hep::Geometry::Position s_pos( 0, 0, s_pos_Z + s_thick/2. );
-	    //	    DD4hep::Geometry::PlacedVolume slice_phv = 
+	    dd4hep::Position s_pos( 0, 0, s_pos_Z + s_thick/2. );
+	    //	    dd4hep::PlacedVolume slice_phv = 
 	    l_vol.placeVolume(s_vol, s_pos );
 
 	  } else { // sensitive slice
@@ -596,7 +623,7 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
             // Normal squared wafers - this is just the sensitive part
             // square piece of silicon, not including guard ring. guard ring material is not included
 
-            DD4hep::Geometry::Box WaferSiSolid( unit_sensitive_dim_Y/2., unit_sensitive_dim_Y/2., s_thick/2.);
+            dd4hep::Box WaferSiSolid( unit_sensitive_dim_Y/2., unit_sensitive_dim_Y/2., s_thick/2.);
 
 	    // get the standard cell size in X for this layer
 	    double cell_size_x = waferSeg ? waferSeg->cellDimensions(0)[0] : megatileSeg->cellDimensions(myLayerNumTemp, 0)[0];
@@ -645,18 +672,18 @@ void SEcal05_Helpers::makeModule( DD4hep::Geometry::Volume & mod_vol,  // the vo
                 wafer_num++;
                 std::string Wafer_name;
                 if ( isMagic ) Wafer_name="magic";
-                Wafer_name +=  _toString(wafer_num,"wafer%d");
+                Wafer_name +=  dd4hep::_toString(wafer_num,"wafer%d");
 
-                DD4hep::Geometry::Box* box = isMagic ? new DD4hep::Geometry::Box( megatile_sensitive_size_x/2,unit_sensitive_dim_Y/2,s_thick/2.) : &WaferSiSolid;
-                DD4hep::Geometry::Volume WaferSiLog(_det_name+"_"+l_name+"_"+s_name+"_"+Wafer_name,*box,slice_material);
+                dd4hep::Box* box = isMagic ? new dd4hep::Box( megatile_sensitive_size_x/2,unit_sensitive_dim_Y/2,s_thick/2.) : &WaferSiSolid;
+                dd4hep::Volume WaferSiLog(_det_name+"_"+l_name+"_"+s_name+"_"+Wafer_name,*box,slice_material);
 
 		std::string wafer_vis_str = isMagic ? "YellowVis" : vis_str;
 		
-		WaferSiLog.setVisAttributes(lcdd.visAttributes( wafer_vis_str ));	  
+		WaferSiLog.setVisAttributes(theDetector.visAttributes( wafer_vis_str ));	  
                 WaferSiLog.setSensitiveDetector(sens);
 
-                DD4hep::Geometry::Position w_pos(wafer_pos_X + megatile_size_x/2., wafer_pos_Y, s_pos_Z + s_thick/2. );
-                DD4hep::Geometry::PlacedVolume wafer_phv = l_vol.placeVolume(WaferSiLog, w_pos );
+                dd4hep::Position w_pos(wafer_pos_X + megatile_size_x/2., wafer_pos_Y, s_pos_Z + s_thick/2. );
+                dd4hep::PlacedVolume wafer_phv = l_vol.placeVolume(WaferSiLog, w_pos );
                 wafer_phv.addPhysVolID("wafer", wafer_num);
 		wafer_phv.addPhysVolID("layer", myLayerNumTemp );
 

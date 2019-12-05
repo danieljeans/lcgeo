@@ -27,17 +27,15 @@
 #include <assert.h>
 
 using namespace std;
-using namespace DD4hep;
-using namespace dd4hep ;
-using namespace DD4hep::Geometry;
-using namespace DDRec;
+using namespace dd4hep;
+using namespace rec;
 
 /// helper to wrap access to global constants
-struct EnvLCDD{
-  LCDD* _lcdd ;
-  EnvLCDD() : _lcdd(0) {} ;
-  EnvLCDD(LCDD& lcdd) : _lcdd( &lcdd) {} ;
-  inline double GetParameterAsDouble(const std::string& name) const {  return _lcdd->constant<double>( name ) ; } 
+struct EnvDetector{
+  Detector* _theDetector;
+  EnvDetector() : _theDetector(0) {} ;
+  EnvDetector(Detector& theDetector) : _theDetector( &theDetector) {} ;
+  inline double GetParameterAsDouble(const std::string& name) const {  return _theDetector->constant<double>( name ) ; } 
 } ;
 
 
@@ -75,9 +73,9 @@ Material _CarbonFiberMat ;
 // function prototpyes
 double Getdy(const double & innerRadius );
 double Getdx( const double & innerRadius );
-//void DoAndPlaceDisk( LCDD& lcdd,DetElement det,SensitiveDetector sens, std::map<std::string,double> valuesDict, Volume  mother ) ;
-void petalSupport( LCDD& lcdd,DetElement det,  std::map<std::string,double> valuesDict, Volume  FTDPetalAirLogical ) ;
-VolVec  petalSensor(  LCDD& lcdd, DetElement ftd, SensitiveDetector sens, std::map<std::string,double> valuesDict, Volume  FTDPetalAirLogical ) ;
+//void DoAndPlaceDisk( Detector& theDetector,DetElement det,SensitiveDetector sens, std::map<std::string,double> valuesDict, Volume  mother ) ;
+void petalSupport( Detector& theDetector,DetElement det,  std::map<std::string,double> valuesDict, Volume  FTDPetalAirLogical ) ;
+VolVec  petalSensor(  Detector& theDetector, DetElement ftd, SensitiveDetector sens, std::map<std::string,double> valuesDict, Volume  FTDPetalAirLogical ) ;
 Trap SemiPetalSolid(const double& petal_cp_support_dy, const std::string& whereItgoes, const bool isSilicon ) ;
 
 
@@ -88,7 +86,7 @@ void printVolume( Volume v ){
 //=========================== PARAMETERS SETTERS FUNCTIONS ====================================/
 //*********************************************************************************************
 // Set Environment variables (dependent of other subdetectors)
-void SetEnvironPar(const EnvLCDD& env)
+void SetEnvironPar(const EnvDetector& env)
 {
 
   _glEnv.TPC_Ecal_Hcal_barrel_halfZ = env.GetParameterAsDouble("TPC_Ecal_Hcal_barrel_halfZ") ;
@@ -301,10 +299,10 @@ void SetParDisk( XMLHandlerDB db)
  *  @author: F.Gaede, DESY, May 2014
  *  @version $Id$
  */
-static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
+static Ref_t create_element(Detector& theDetector, xml_h e, SensitiveDetector sens)  {
 
 
-  //  std::cout << " FTD04 - LCDD.BuildType = " << lcdd.buildType() << std::endl ;
+  //  std::cout << " FTD04 - Detector.BuildType = " << theDetector.buildType() << std::endl ;
 
   //------------------------------------------
   //  See comments starting with '//**' for
@@ -319,11 +317,11 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
 
  // --- create an envelope volume and position it into the world ---------------------
   
-  Volume envelope = XML::createPlacedEnvelope( lcdd,  e , ftd ) ;
+  Volume envelope = dd4hep::xml::createPlacedEnvelope( theDetector,  e , ftd ) ;
   
-  XML::setDetectorTypeFlag( e, ftd ) ;
+  dd4hep::xml::setDetectorTypeFlag( e, ftd ) ;
 
-  if( lcdd.buildType() == BUILD_ENVELOPE ) return ftd ;
+  if( theDetector.buildType() == BUILD_ENVELOPE ) return ftd ;
   
   //-----------------------------------------------------------------------------------
   
@@ -342,7 +340,7 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
   //--------------------------------
 
 
-   DDRec::ZDiskPetalsData*  zDiskPetalsData = new ZDiskPetalsData ;
+  dd4hep::rec::ZDiskPetalsData*  zDiskPetalsData = new ZDiskPetalsData ;
 
  //######################################################################################################################################################################
   //  code ported from FTD_Simple_Staggered::construct() :
@@ -368,18 +366,18 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
   // 	PhysicalVolumesPair Phys;
   
   // Get and set the Globals from the surrounding environment TPC ECAL SIT VTX and Beam-Pipe
-  SetEnvironPar(   EnvLCDD( lcdd ) );
+  SetEnvironPar(   EnvDetector( theDetector ) );
 	
   // Get and set the variables global to the FTD cables_thickness, ftd1_vtx3_distance_z, etc
   //  Database * db = new Database(env.GetDBName());
   SetdbParCommon( x_det );
   
   // Materials definitions
-  _SiMat     = lcdd.material("G4_Si") ; // silicon_2.33gccm");
-  _KaptonMat = lcdd.material("G4_KAPTON"); //kapton");
-  _CuMat     = lcdd.material("G4_Cu"); //copper"); 
-  _AirMat    = lcdd.material("G4_AIR" ); //air");
-  _CarbonFiberMat = lcdd.material("CarbonFiber");
+  _SiMat     = theDetector.material("G4_Si") ; // silicon_2.33gccm");
+  _KaptonMat = theDetector.material("G4_KAPTON"); //kapton");
+  _CuMat     = theDetector.material("G4_Cu"); //copper"); 
+  _AirMat    = theDetector.material("G4_AIR" ); //air");
+  _CarbonFiberMat = theDetector.material("CarbonFiber");
  
 
   //fg: replace with standard from materials file
@@ -671,9 +669,9 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
 
 
     //    FTDDiskLogical->SetVisAttributes(VisAttAirDisk);
-    //    ftd.setVisAttributes(lcdd,  "SeeThrough", FTDDiskLogical ) ;
-    ftd.setVisAttributes(lcdd,  "SeeThrough", FTDDiskLogicalPZ ) ;
-    ftd.setVisAttributes(lcdd,  "SeeThrough", FTDDiskLogicalNZ ) ;
+    //    ftd.setVisAttributes(theDetector,  "SeeThrough", FTDDiskLogical ) ;
+    ftd.setVisAttributes(theDetector,  "SeeThrough", FTDDiskLogicalPZ ) ;
+    ftd.setVisAttributes(theDetector,  "SeeThrough", FTDDiskLogicalNZ ) ;
 
 		
     
@@ -816,7 +814,7 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
     Volume FTDPetalAirLogical( _toString(  _dbParDisk.disk_number, "FTDPetalAirLogical_%d" ) , FTDPetalAirSolid, _AirMat ) ;
     //printVolume( FTDPetalAirLogical ) ; 
 
-    ftd.setVisAttributes(lcdd,  "SeeThrough" , FTDPetalAirLogical ) ;
+    ftd.setVisAttributes(theDetector,  "SeeThrough" , FTDPetalAirLogical ) ;
 
 		
     // Placing N-copies of the air petal inside the air disk. The copies are built using the z-axis as
@@ -926,7 +924,7 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
     
     
     // -------- reconstruction parameters  ----------------
-    DDRec::ZDiskPetalsData::LayerLayout thisLayer ;
+    dd4hep::rec::ZDiskPetalsData::LayerLayout thisLayer ;
     
     int isDoubleSided = false;
     int nSensors = 1;
@@ -936,8 +934,8 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
       nSensors = 2;
     }
 
-    thisLayer.typeFlags[ DDRec::ZDiskPetalsData::SensorType::DoubleSided ] = isDoubleSided ;
-    thisLayer.typeFlags[ DDRec::ZDiskPetalsData::SensorType::Pixel ]	   = _dbParDisk.sensor_is_pixel ;
+    thisLayer.typeFlags[ dd4hep::rec::ZDiskPetalsData::SensorType::DoubleSided ] = isDoubleSided ;
+    thisLayer.typeFlags[ dd4hep::rec::ZDiskPetalsData::SensorType::Pixel ]	   = _dbParDisk.sensor_is_pixel ;
 
     thisLayer.petalHalfAngle	  = _dbParCommon.petal_half_angle_support ;
     thisLayer.alphaPetal	  = 0. ;	// petals are othogonal to z-axis
@@ -1013,18 +1011,23 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
     
 
       
-    //    DoAndPlaceDisk( lcdd, ftd, sens, valuesDict, FTDPetalAirLogical );		
+    //    DoAndPlaceDisk( theDetector, ftd, sens, valuesDict, FTDPetalAirLogical );		
 
-    petalSupport(lcdd, ftd, valuesDict, FTDPetalAirLogical ) ; 
+    petalSupport(theDetector, ftd, valuesDict, FTDPetalAirLogical ) ; 
 
-    VolVec volV = petalSensor( lcdd, ftd, sens, valuesDict, FTDPetalAirLogical );
+    VolVec volV = petalSensor( theDetector, ftd, sens, valuesDict, FTDPetalAirLogical );
 
 
     //---- meassurement surface vectors 
-    Vector3D u0( 1. , 0. ,  0. ) ;
-    Vector3D v0( 0. , 1. ,  0. ) ;
-    Vector3D n0( 0. , 0. , -1. ) ;
-    Vector3D u1,v1,n1 ;
+
+    Vector3D u0( -1. , 0. ,  0. ) ;
+    Vector3D v0(  0. , 1. ,  0. ) ;
+    Vector3D n0(  0. , 0. , -1. ) ;
+
+    Vector3D u1( -1. , 0. ,  0. ) ;
+    Vector3D v1(  0. , 1. ,  0. ) ;
+    Vector3D n1(  0. , 0. , -1. ) ;
+
     
     double supp_thick = _dbParDisk.petal_cp_support_thickness ;
     double active_silicon_thickness =  _dbParDisk.disks_Si_thickness  ;
@@ -1039,14 +1042,12 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
       // implement stereo angle 
       double strip_angle  = _dbParExReco.strip_angle  ;
       
-      // choose the rotation here such that is compatible with
-      // the old gear based system implementation:
-
-      u0.fill(  cos( strip_angle ) , -sin( strip_angle  ) , 0. ) ;
+      // choose the rotation here such that u x v = n
+      
+      u0.fill( -cos( strip_angle ) ,  sin( strip_angle  ) , 0. ) ;
       v0.fill(  sin( strip_angle ) ,  cos( strip_angle  ) , 0. ) ;
 
-      n1.fill(   0., 0., -1. ) ;
-      u1.fill(  cos( strip_angle ) ,  sin( strip_angle  ) , 0. ) ;
+      u1.fill( -cos( strip_angle ) , -sin( strip_angle  ) , 0. ) ;
       v1.fill( -sin( strip_angle ) ,  cos( strip_angle  ) , 0. ) ;
 
     }
@@ -1085,14 +1086,14 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
 	std::stringstream sspz1 ;  sspz1 << "ftd_sensor_posZ_" << disk_number << "_"  << i << "_1"  ;
 	std::stringstream ssnz1 ;  ssnz1 << "ftd_sensor_negZ_" << disk_number << "_"  << i << "_1"  ;
 
-	DetElement sensorDEposZ( petVecposZ[i], sspz1.str() ,  x_det.id() );
-	DetElement sensorDEnegZ( petVecnegZ[i], ssnz1.str() ,  x_det.id() );
+	DetElement sensorDEposZ_2( petVecposZ[i], sspz1.str() ,  x_det.id() );
+	DetElement sensorDEnegZ_2( petVecnegZ[i], ssnz1.str() ,  x_det.id() );
 
-	sensorDEposZ.setPlacement( volV[1].second ) ;
-	sensorDEnegZ.setPlacement( volV[1].second ) ;
+	sensorDEposZ_2.setPlacement( volV[1].second ) ;
+	sensorDEnegZ_2.setPlacement( volV[1].second ) ;
 
-	volSurfaceList( sensorDEposZ )->push_back( surf1 ) ;
-	volSurfaceList( sensorDEnegZ )->push_back( surf1 ) ;
+	volSurfaceList( sensorDEposZ_2 )->push_back( surf1 ) ;
+	volSurfaceList( sensorDEnegZ_2 )->push_back( surf1 ) ;
       }
     }
 
@@ -1124,7 +1125,7 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
   
   Volume FTDOuterCylinderLogical("FTDOuterCylinder", FTDOuterCylinderSolid, _KaptonMat ) ;
 
-  ftd.setVisAttributes( lcdd, "FTDCylVis", FTDOuterCylinderLogical ) ;
+  ftd.setVisAttributes( theDetector, "FTDCylVis", FTDOuterCylinderLogical ) ;
 	
   Transform3D transCylPlus(  RotationZYX() , Position(0.,0.,OuterCylinder_position));
   Transform3D transCylMinus( RotationZYX(), Position(0.,0.,-OuterCylinder_position));
@@ -1186,7 +1187,7 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
   
   Volume FTDInnerCylinderLogical("FTDInnerCylinder", FTDInnerCylinderSolid, _KaptonMat ) ;
 
-  ftd.setVisAttributes( lcdd, "FTDCylVis", FTDInnerCylinderLogical ) ;
+  ftd.setVisAttributes( theDetector, "FTDCylVis", FTDInnerCylinderLogical ) ;
   
   ConeSegment FTDCableShieldSolid( InnerCylinder_half_z,
 				   cableShieldRmin1,
@@ -1198,7 +1199,7 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
   
   Volume FTDCableShieldLogical( "FTDInnerCableShield", FTDCableShieldSolid, _KaptonMat ) ;
 			        
-  ftd.setVisAttributes( lcdd, "FTDCylVis",   FTDCableShieldLogical );
+  ftd.setVisAttributes( theDetector, "FTDCylVis",   FTDCableShieldLogical );
   
   ConeSegment FTDCablesSolid( InnerCylinder_half_z,
 			      cablesRmin1,
@@ -1210,7 +1211,7 @@ static Ref_t create_element(LCDD& lcdd, xml_h e, SensitiveDetector sens)  {
   
   Volume FTDCablesLogical("FTDInnerCables", FTDCablesSolid, _CuMat ) ;
 			   
-  ftd.setVisAttributes( lcdd, "FTDCylVis",  FTDCablesLogical ) ;
+  ftd.setVisAttributes( theDetector, "FTDCylVis",  FTDCablesLogical ) ;
   
   // fg: the placements are all commented out in the Mokka original
   //     so no outer cylinder is created - do we need one ???
@@ -1298,10 +1299,10 @@ DECLARE_DETELEMENT(FTD_Simple_Staggered ,create_element)
 // //                   mother:     Volume where will be placed the volumes are going to
 // //                               build.
 // //
-// void DoAndPlaceDisk( LCDD& lcdd,DetElement det,  SensitiveDetector sens, std::map<std::string,double> valuesDict, Volume  mother )
+// void DoAndPlaceDisk( Detector& theDetector,DetElement det,  SensitiveDetector sens, std::map<std::string,double> valuesDict, Volume  mother )
 // {
-//   petalSupport(lcdd, det, valuesDict, mother ) ; // support is placed at 0,0,0 withing the petal
-//   petalSensor( lcdd, det, sens, valuesDict, mother );
+//   petalSupport(theDetector, det, valuesDict, mother ) ; // support is placed at 0,0,0 withing the petal
+//   petalSensor( theDetector, det, sens, valuesDict, mother );
 //}
 
 //***********************************************************************************************
@@ -1313,11 +1314,11 @@ DECLARE_DETELEMENT(FTD_Simple_Staggered ,create_element)
 //                   mother:     Volume the volumes built are to be placed.
 
 
-void petalSupport( LCDD& lcdd, DetElement ftd,  std::map<std::string,double> valuesDict, Volume  FTDPetalAirLogical )
+void petalSupport( Detector& theDetector, DetElement ftd,  std::map<std::string,double> valuesDict, Volume  FTDPetalAirLogical )
 {
   double petal_cp_supp_half_dxMin = valuesDict["petal_cp_supp_half_dxMin"];
   double petal_cp_support_dy = valuesDict["petal_cp_support_dy"];
-  double _inner_radius = valuesDict["_inner_radius"];
+  double _inner_radius_petal = valuesDict["_inner_radius"];
 
   if( _dbParDisk.sensor_is_pixel == 1) {
 
@@ -1336,7 +1337,7 @@ void petalSupport( LCDD& lcdd, DetElement ftd,  std::map<std::string,double> val
     Volume FTDPetalSupportLogical( _toString(  _dbParDisk.disk_number, "FTDPetalSupportLogical_%d" ), FTDPetalSupportSolid, _CarbonFiberMat );
     //printVolume( FTDPetalSupportLogical ) ;
 
-    ftd.setVisAttributes(lcdd,  "FTDSupportVis" , FTDPetalSupportLogical ) ; 
+    ftd.setVisAttributes(theDetector,  "FTDSupportVis" , FTDPetalSupportLogical ) ; 
 
     // Position Ta;
     // Ta.setX(0.0); 
@@ -1352,7 +1353,8 @@ void petalSupport( LCDD& lcdd, DetElement ftd,  std::map<std::string,double> val
     // 								    0);
     //   registerPV(Phys);
 
-    PlacedVolume pv = FTDPetalAirLogical.placeVolume( FTDPetalSupportLogical , Transform3D() ) ;
+    // PlacedVolume pv =
+    FTDPetalAirLogical.placeVolume( FTDPetalSupportLogical , Transform3D() ) ;
 
 
 
@@ -1468,8 +1470,8 @@ void petalSupport( LCDD& lcdd, DetElement ftd,  std::map<std::string,double> val
     Volume FTDPetalSupportLogical (_toString(  _dbParDisk.disk_number, "FTDPetalSupportLogical_%d" ), FTDPetalSupportSolid,  _CarbonFiberMat ) ;
     //printVolume( FTDPetalSupportLogical ) ;
 
-    ftd.setVisAttributes(lcdd,  "FTDSupportVis" , FTDPetalSupportLogical ) ; 
-    //ftd.setVisAttributes(lcdd,  "Green Vis" , FTDPetalSupportLogical ) ; 
+    ftd.setVisAttributes(theDetector,  "FTDSupportVis" , FTDPetalSupportLogical ) ; 
+    //ftd.setVisAttributes(theDetector,  "Green Vis" , FTDPetalSupportLogical ) ; 
 
 
       // // Placing all together ( support petal boolean  ) inside the air petal container
@@ -1482,7 +1484,8 @@ void petalSupport( LCDD& lcdd, DetElement ftd,  std::map<std::string,double> val
       // 								      0);
       // registerPV(Phys);
 
-      PlacedVolume pv = FTDPetalAirLogical.placeVolume( FTDPetalSupportLogical , Transform3D() ) ;
+      // PlacedVolume pv =
+	   FTDPetalAirLogical.placeVolume( FTDPetalSupportLogical , Transform3D() ) ;
 
     }
   //-END--------------------------- Central Part ----------------------------------END-/
@@ -1491,7 +1494,7 @@ void petalSupport( LCDD& lcdd, DetElement ftd,  std::map<std::string,double> val
 #ifdef DEBUG_VALUES
   cout << "===================================================================== " << "\n" <<
     "FTDPetalSupport:\n" << 
-    " Inner Radius= " << _inner_radius <<  "\n" <<
+    " Inner Radius= " << _inner_radius_petal <<  "\n" <<
     " Outer Radius= " << _outer_radius <<  "\n" <<
     " xMax = " << _dbParDisk.petal_cp_support_dxMax <<  "\n" <<
     " xMin = " << 2.0*petal_cp_supp_half_dxMin << "\n" <<
@@ -1508,7 +1511,7 @@ void petalSupport( LCDD& lcdd, DetElement ftd,  std::map<std::string,double> val
 
 
   // Gear Ladder 
-  _ftdparameters[gearpar::SUPPORTRINNER].push_back(_inner_radius);
+  _ftdparameters[gearpar::SUPPORTRINNER].push_back(_inner_radius_petal);
   _ftdparameters[gearpar::SUPPORTLENGTHMIN].push_back(2.0*petal_cp_supp_half_dxMin);
   _ftdparameters[gearpar::SUPPORTLENGTHMAX].push_back(_dbParDisk.petal_cp_support_dxMax);
   _ftdparameters[gearpar::SUPPORTWIDTH].push_back(petal_cp_support_dy);
@@ -1523,13 +1526,13 @@ void petalSupport( LCDD& lcdd, DetElement ftd,  std::map<std::string,double> val
 //                               parameters, to be passed to the real building functions
 //                   mother:     Volume the volumes built are to be placed.
 
-VolVec petalSensor(  LCDD& lcdd, DetElement ftd, SensitiveDetector sens, std::map<std::string,double> valuesDict, Volume  FTDPetalAirLogical ) {
+VolVec petalSensor(  Detector& theDetector, DetElement ftd, SensitiveDetector sens, std::map<std::string,double> valuesDict, Volume  FTDPetalAirLogical ) {
   
   VolVec volV ;
 
   double petal_half_dxMin = valuesDict["petal_cp_supp_half_dxMin"];
   double petal_dy = valuesDict["petal_cp_support_dy"];
-  double _inner_radius = valuesDict["_inner_radius"];
+  double _inner_radius_petalSensor = valuesDict["_inner_radius"];
   
   Trap FTDPetalSensitiveSolid( _dbParDisk.disks_Si_thickness/2.0, //thickness
 				0.0,
@@ -1558,8 +1561,8 @@ VolVec petalSensor(  LCDD& lcdd, DetElement ftd, SensitiveDetector sens, std::ma
 
   FTDPetalSensitiveLogical.setSensitiveDetector( sens ) ;
 
-  //ftd.setVisAttributes(  lcdd, "SeeThrough" , FTDPetalSensitiveLogical );
-  ftd.setVisAttributes(  lcdd, "FTDSensitiveVis" , FTDPetalSensitiveLogical );
+  //ftd.setVisAttributes(  theDetector, "SeeThrough" , FTDPetalSensitiveLogical );
+  ftd.setVisAttributes(  theDetector, "FTDSensitiveVis" , FTDPetalSensitiveLogical );
 
   
   // front sensor
@@ -1582,7 +1585,7 @@ VolVec petalSensor(  LCDD& lcdd, DetElement ftd, SensitiveDetector sens, std::ma
 #ifdef DEBUG_VALUES
   cout << "===================================================================== " << "\n" <<
     "FTDPetalSensitive:\n" << 
-    " Inner Radius= " << _inner_radius <<  "\n" <<
+    " Inner Radius= " << _inner_radius_petalSensor <<  "\n" <<
     " Outer Radius= " << _outer_radius <<  "\n" <<
     " xMax = " <<  _dbParDisk.petal_cp_support_dxMax <<  "\n" <<
     " xMin = " << 2.0*petal_half_dxMin << "\n" <<
@@ -1620,7 +1623,7 @@ VolVec petalSensor(  LCDD& lcdd, DetElement ftd, SensitiveDetector sens, std::ma
 #ifdef DEBUG_VALUES
     cout << "===================================================================== " << "\n" <<
     "FTDPetalSensitive:\n" << 
-    " Inner Radius= " << _inner_radius <<  "\n" <<
+    " Inner Radius= " << _inner_radius_petalSensor <<  "\n" <<
     " Outer Radius= " << _outer_radius <<  "\n" <<
     " xMax = " <<  _dbParDisk.petal_cp_support_dxMax <<  "\n" <<
     " xMin = " << 2.0*petal_half_dxMin << "\n" <<
@@ -1752,7 +1755,7 @@ VolVec petalSensor(  LCDD& lcdd, DetElement ftd, SensitiveDetector sens, std::ma
   //        // Gear
   //	int howManyPixelsUp = (int)(_dbParDisk.petal_cp_support_dxMax/pixel_si_length);
 	
-  _ftdparameters[gearpar::SENSITIVERINNER].push_back(_inner_radius);
+  _ftdparameters[gearpar::SENSITIVERINNER].push_back(_inner_radius_petalSensor);
   _ftdparameters[gearpar::SENSITIVELENGTHMIN].push_back(2.0*petal_half_dxMin);
   _ftdparameters[gearpar::SENSITIVELENGTHMAX].push_back(_dbParDisk.petal_cp_support_dxMax);
   _ftdparameters[gearpar::SENSITIVEWIDTH].push_back(petal_dy);

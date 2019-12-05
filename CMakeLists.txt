@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 #---------------------------
 set( PackageName lcgeo )
@@ -8,8 +8,8 @@ project(${PackageName})
 
 # project version
 SET( ${PackageName}_VERSION_MAJOR 0 )
-SET( ${PackageName}_VERSION_MINOR 9 )
-SET( ${PackageName}_VERSION_PATCH 1 )
+SET( ${PackageName}_VERSION_MINOR 16 )
+SET( ${PackageName}_VERSION_PATCH 4 )
 
 SET( ${PackageName}_VERSION "${${PackageName}_VERSION_MAJOR}.${${PackageName}_VERSION_MINOR}" )
 SET( ${PackageName}_SOVERSION "${${PackageName}_VERSION_MAJOR}.${${PackageName}_VERSION_MINOR}" )
@@ -37,8 +37,12 @@ option(CMAKE_MACOSX_RPATH "Build with rpath on macos" ON)
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
-find_package(DD4hep REQUIRED COMPONENTS DDSegmentation DDRec DDG4)
+find_package(DD4hep REQUIRED COMPONENTS DDRec DDG4 DDParsers)
 dd4hep_set_compiler_flags()
+
+SET( DD4hep_REDUCED_COMPONENT ${DD4hep_COMPONENT_LIBRARIES} )
+## Drop DDG4 from components for normal geometry plugins
+LIST( REMOVE_AT DD4hep_REDUCED_COMPONENT -2 )
 
 find_package ( ROOT REQUIRED COMPONENTS Geom GenVector)
 include(${ROOT_USE_FILE})
@@ -58,20 +62,26 @@ include_directories( SYSTEM
   ${DD4hep_INCLUDE_DIRS}
   ${DD4hep_COMPONENTS_INCLUDE_DIRS}
   ${ROOT_INCLUDE_DIR}
+  ${ROOT_INCLUDE_DIRS}
   ${LCIO_INCLUDE_DIRS}
  )
 #  ${GEAR_INCLUDE_DIRS}
 
 file(GLOB sources 
-  ./sensitive/TPCSDAction.cpp 
-  ./sensitive/CaloPreShowerSDAction.cpp 
   ./detector/tracker/*.cpp 
   ./detector/calorimeter/*.cpp 
   ./detector/fcal/*.cpp 
   ./detector/other/*.cpp 
   ./detector/CaloTB/*.cpp 
   ./FCalTB/setup/*.cpp
+  ./plugins/LinearSortingPolicy.cpp
   )
+
+file(GLOB G4sources
+  ./plugins/TPCSDAction.cpp
+  ./plugins/CaloPreShowerSDAction.cpp
+)
+
 
 #file(GLOB headers ./ILD/include/*.h)
 
@@ -81,8 +91,15 @@ if(DD4HEP_USE_PYROOT)
 endif()
 
 #Create target, library, rootmap, install
+
 add_dd4hep_plugin(${PackageName} SHARED ${sources})
-target_link_libraries(${PackageName} ${DD4hep_LIBRARIES} ${DD4hep_COMPONENT_LIBRARIES} ${ROOT_LIBRARIES} ${Geant4_LIBRARIES} ${LCIO_LIBRARIES})
+
+add_dd4hep_plugin(${PackageName}G4 SHARED ${G4sources})
+
+target_link_libraries(${PackageName} ${DD4hep_LIBRARIES} ${DD4hep_REDUCED_COMPONENT} ${ROOT_LIBRARIES} ${LCIO_LIBRARIES})
+
+target_link_libraries(${PackageName}G4 ${DD4hep_LIBRARIES} ${DD4hep_COMPONENT_LIBRARIES} ${ROOT_LIBRARIES} ${Geant4_LIBRARIES} ${LCIO_LIBRARIES})
+
 
 #Create this_package.sh file, and install
 dd4hep_instantiate_package(${PackageName})
@@ -101,13 +118,4 @@ endif(BUILD_TESTING)
 FILE(GLOB hfiles "ILD/include/*.h")
 INSTALL(FILES ${hfiles} 
   DESTINATION include/${PackageName} 
-  )
-
-INSTALL(DIRECTORY DDSim/DDSim
-  DESTINATION lib/python
-  FILES_MATCHING PATTERN *.py
-  )
-
-INSTALL(PROGRAMS DDSim/bin/ddsim
-  DESTINATION bin
   )
